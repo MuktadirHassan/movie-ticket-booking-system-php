@@ -7,11 +7,8 @@ ini_set('display_errors', 1);
 // Include the database connection
 include 'db.php';
 
-
-
 // Check if the user is logged in and is an admin
 if (!isset($_SESSION['user_id']) || !$_SESSION['is_admin']) {
-    // header('Location: login.php');
     echo "<div class='container mx-auto'><h1 class='text-2xl font-bold mt-8'>You are not authorized to access this page.</h1></div>";
     exit();
 }
@@ -84,13 +81,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_show'])) {
     }
 }
 
-// Fetch all movies for the show form
-$movies = [];
-$result = $conn->query("SELECT id, title FROM movies");
-while ($row = $result->fetch_assoc()) {
-    $movies[] = $row;
+// Fetch all movies and their shows for display
+$movies_with_shows = [];
+$movie_result = $conn->query("SELECT * FROM movies");
+while ($movie = $movie_result->fetch_assoc()) {
+    $show_result = $conn->query("SELECT * FROM shows WHERE movie_id = " . $movie['id']);
+    $shows = [];
+    while ($show = $show_result->fetch_assoc()) {
+        $shows[] = $show;
+    }
+    $movie['shows'] = $shows;
+    $movies_with_shows[] = $movie;
 }
-$result->free();
 ?>
 
 <!DOCTYPE html>
@@ -146,7 +148,7 @@ $result->free();
                 <label for="movie_id" class="block text-gray-700">Movie</label>
                 <select name="movie_id" id="movie_id" class="mt-1 p-2 border rounded w-full" required>
                     <option value="">Select a movie</option>
-                    <?php foreach ($movies as $movie) : ?>
+                    <?php foreach ($movies_with_shows as $movie) : ?>
                         <option value="<?php echo $movie['id']; ?>"><?php echo htmlspecialchars($movie['title']); ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -157,6 +159,28 @@ $result->free();
             </div>
             <button type="submit" class="p-2 bg-blue-500 text-white rounded">Add Show</button>
         </form>
+
+        <h2 class="text-xl font-bold mt-8">Movies and Shows</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+            <?php foreach ($movies_with_shows as $movie) : ?>
+                <div class="bg-white p-4 shadow-lg rounded">
+                    <h3 class="text-xl font-bold"><?php echo htmlspecialchars($movie['title']); ?></h3>
+                    <p class="text-gray-700 mt-2"><?php echo htmlspecialchars($movie['description']); ?></p>
+                    <p class="text-gray-700 mt-2">Release Date: <?php echo htmlspecialchars($movie['release_date']); ?></p>
+                    <p class="text-gray-700 mt-2">Duration: <?php echo htmlspecialchars($movie['duration']); ?> minutes</p>
+                    <h4 class="text-lg font-bold mt-4">Shows</h4>
+                    <?php if (!empty($movie['shows'])) : ?>
+                        <ul class="list-disc list-inside">
+                            <?php foreach ($movie['shows'] as $show) : ?>
+                                <li class="mt-2">Show Time: <?php echo htmlspecialchars($show['show_time']); ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php else : ?>
+                        <p class="text-gray-700 mt-2">No shows available.</p>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
     </div>
 </body>
 
