@@ -5,6 +5,7 @@ ini_set('display_errors', 1);
 
 // Include the database connection
 include 'db.php';
+session_start();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = $_POST['username'];
@@ -45,13 +46,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <title>Register</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.0/dist/tailwind.min.css" rel="stylesheet">
-</head>
+<?php include 'head.php'; ?>
 
 <body>
+    <?php include 'nav.php'; ?>
     <div class="container mx-auto">
         <h1 class="text-2xl font-bold mt-8">Register</h1>
         <?php if (isset($error)) : ?>
