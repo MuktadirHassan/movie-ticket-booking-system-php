@@ -9,7 +9,7 @@ if ($conn->connect_error) {
     die('Connection failed: ' . $conn->connect_error);
 }
 
-// // Test connection
+// Test connection
 // if ($conn->query("SELECT 1")) {
 //     echo "Database connection successful!";
 // } else {

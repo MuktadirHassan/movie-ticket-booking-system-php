@@ -1,16 +1,20 @@
-<?php include 'header.php'; ?>
-<?php include 'user.php'; ?>
-
 <?php
+include 'db.php';
 // show movies
 $movies = [];
 $result = $conn->query("SELECT id, title, description, release_date, duration FROM movies");
 while ($row = $result->fetch_assoc()) {
     $movies[] = $row;
 }
+$result->free();
+session_start();
 ?>
+<!DOCTYPE html>
+<html lang="en">
+<?php include 'head.php'; ?>
 
 <body>
+    <?php include 'nav.php'; ?>
     <div class="container mx-auto">
         <h1 class="text-4xl font-bold text-center mt-10">Absolute Cinema</h1>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-10">

@@ -1,16 +1,18 @@
 <?php
+session_start();
 // Enable error reporting for debugging
 error_reporting(E_ALL);
 ini_set('display_errors', 1);
 
 // Include the database connection
 include 'db.php';
-include 'user.php';
+
 
 
 // Check if the user is logged in and is an admin
 if (!isset($_SESSION['user_id']) || !$_SESSION['is_admin']) {
-    header('Location: login.php');
+    // header('Location: login.php');
+    echo "<div class='container mx-auto'><h1 class='text-2xl font-bold mt-8'>You are not authorized to access this page.</h1></div>";
     exit();
 }
 
@@ -47,15 +49,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_show'])) {
     if (empty($movie_id) || empty($show_time)) {
         $showError = "Movie and Show Time are required.";
     } else {
-        $stmt = $conn->prepare("INSERT INTO shows (movie_id, show_time) VALUES (?, ?)");
-        $stmt->bind_param("is", $movie_id, $show_time);
+        // Start a transaction
+        $conn->begin_transaction();
 
-        if ($stmt->execute()) {
-            $successMessage = "Show added successfully!";
-        } else {
-            $showError = "Error: " . $stmt->error;
+        try {
+            // Insert the new show into the shows table
+            $stmt = $conn->prepare("INSERT INTO shows (movie_id, show_time) VALUES (?, ?)");
+            $stmt->bind_param("is", $movie_id, $show_time);
+            if (!$stmt->execute()) {
+                throw new Exception($stmt->error);
+            }
+            $show_id = $stmt->insert_id;
+            $stmt->close();
+
+            // Insert seats for the new show
+            $seat_stmt = $conn->prepare("INSERT INTO seats (show_id, seat_number, is_booked) VALUES (?, ?, FALSE)");
+            for ($i = 1; $i <= 64; $i++) {
+                $seat_number = str_pad($i, 2, '0', STR_PAD_LEFT);
+                $seat_stmt->bind_param("is", $show_id, $seat_number);
+                if (!$seat_stmt->execute()) {
+                    throw new Exception($seat_stmt->error);
+                }
+            }
+            $seat_stmt->close();
+
+            // Commit the transaction
+            $conn->commit();
+            $successMessage = "Show and seats added successfully!";
+        } catch (Exception $e) {
+            // Rollback the transaction on error
+            $conn->rollback();
+            $showError = "Error: " . $e->getMessage();
         }
-        $stmt->close();
     }
 }
 
@@ -68,17 +93,13 @@ while ($row = $result->fetch_assoc()) {
 $result->free();
 ?>
 
-
 <!DOCTYPE html>
 <html lang="en">
 
-<head>
-    <meta charset="UTF-8">
-    <title>Admin Panel</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.0/dist/tailwind.min.css" rel="stylesheet">
-</head>
+<?php include 'head.php'; ?>
 
 <body>
+    <?php include 'nav.php'; ?>
     <div class="container mx-auto">
         <h1 class="text-2xl font-bold mt-8">Admin Panel</h1>
         <?php if ($successMessage) : ?>
@@ -136,55 +157,6 @@ $result->free();
             </div>
             <button type="submit" class="p-2 bg-blue-500 text-white rounded">Add Show</button>
         </form>
-    </div>
-    <!-- list all the shows and movies -->
-    <div class="container mx-auto mt-8">
-        <h2 class="text-xl font-bold">Movies</h2>
-        <table class="w-full mt-4">
-            <thead>
-                <tr>
-                    <th class="border p-2">Title</th>
-                    <th class="border p-2">Description</th>
-                    <th class="border p-2">Release Date</th>
-                    <th class="border p-2">Duration</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php
-                $result = $conn->query("SELECT * FROM movies");
-                while ($row = $result->fetch_assoc()) {
-                    echo "<tr>";
-                    echo "<td class='border p-2'>" . htmlspecialchars($row['title']) . "</td>";
-                    echo "<td class='border p-2'>" . htmlspecialchars($row['description']) . "</td>";
-                    echo "<td class='border p-2'>" . htmlspecialchars($row['release_date']) . "</td>";
-                    echo "<td class='border p-2'>" . htmlspecialchars($row['duration']) . "</td>";
-                    echo "</tr>";
-                }
-                $result->free();
-                ?>
-            </tbody>
-        </table>
-        <h2 class="text-xl font-bold mt-8">Shows</h2>
-        <table class="w-full mt-4">
-            <thead>
-                <tr>
-                    <th class="border p-2">Movie</th>
-                    <th class="border p-2">Show Time</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php
-                $result = $conn->query("SELECT shows.show_time, movies.title FROM shows JOIN movies ON shows.movie_id = movies.id");
-                while ($row = $result->fetch_assoc()) {
-                    echo "<tr>";
-                    echo "<td class='border p-2'>" . htmlspecialchars($row['title']) . "</td>";
-                    echo "<td class='border p-2'>" . htmlspecialchars($row['show_time']) . "</td>";
-                    echo "</tr>";
-                }
-                $result->free();
-                ?>
-            </tbody>
-        </table>
     </div>
 </body>
 

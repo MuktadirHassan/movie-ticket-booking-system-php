@@ -5,7 +5,8 @@ ini_set('display_errors', 1);
 
 // Include the database connection
 include 'db.php';
-include 'user.php';
+session_start();
+
 
 // Check if the user is logged in
 if (!isset($_SESSION['user_id'])) {
@@ -62,14 +63,10 @@ if ($show_id) {
 
 <!DOCTYPE html>
 <html lang="en">
-
-<head>
-    <meta charset="UTF-8">
-    <title>Book Seats</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.0.0/dist/tailwind.min.css" rel="stylesheet">
-</head>
+<?php include 'head.php'; ?>
 
 <body>
+    <?php include 'nav.php'; ?>
     <div class="container mx-auto">
         <h1 class="text-2xl font-bold mt-8">Book Seats for <?php echo htmlspecialchars($movie['title']); ?></h1>
 
