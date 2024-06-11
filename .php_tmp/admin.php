@@ -7,11 +7,8 @@ ini_set('display_errors', 1);
 // Include the database connection
 include 'db.php';
 
-
-
 // Check if the user is logged in and is an admin
 if (!isset($_SESSION['user_id']) || !$_SESSION['is_admin']) {
-    // header('Location: login.php');
     echo "<div class='container mx-auto'><h1 class='text-2xl font-bold mt-8'>You are not authorized to access this page.</h1></div>";
     exit();
 }
@@ -84,13 +81,68 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_show'])) {
     }
 }
 
-// Fetch all movies for the show form
-$movies = [];
-$result = $conn->query("SELECT id, title FROM movies");
-while ($row = $result->fetch_assoc()) {
-    $movies[] = $row;
+// Handle delete requests for movies
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_movie'])) {
+    $movie_id = $_POST['movie_id'];
+
+    // Start a transaction
+    $conn->begin_transaction();
+
+    try {
+        // Delete shows and seats associated with the movie
+        $conn->query("DELETE FROM seats WHERE show_id IN (SELECT id FROM shows WHERE movie_id = $movie_id)");
+        $conn->query("DELETE FROM shows WHERE movie_id = $movie_id");
+        // Delete the movie
+        $stmt = $conn->prepare("DELETE FROM movies WHERE id = ?");
+        $stmt->bind_param("i", $movie_id);
+        if (!$stmt->execute()) {
+            throw new Exception($stmt->error);
+        }
+        $stmt->close();
+
+        // Commit the transaction
+        $conn->commit();
+        $successMessage = "Movie deleted successfully!";
+    } catch (Exception $e) {
+        // Rollback the transaction on error
+        $conn->rollback();
+        $movieError = "Error: " . $e->getMessage();
+    }
 }
-$result->free();
+
+// Handle delete requests for shows
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_show'])) {
+    $show_id = $_POST['show_id'];
+
+    try {
+        // Delete seats associated with the show
+        $conn->query("DELETE FROM seats WHERE show_id = $show_id");
+        // Delete the show
+        $stmt = $conn->prepare("DELETE FROM shows WHERE id = ?");
+        $stmt->bind_param("i", $show_id);
+        if (!$stmt->execute()) {
+            throw new Exception($stmt->error);
+        }
+        $stmt->close();
+
+        $successMessage = "Show deleted successfully!";
+    } catch (Exception $e) {
+        $showError = "Error: " . $e->getMessage();
+    }
+}
+
+// Fetch all movies and their shows for display
+$movies_with_shows = [];
+$movie_result = $conn->query("SELECT * FROM movies");
+while ($movie = $movie_result->fetch_assoc()) {
+    $show_result = $conn->query("SELECT * FROM shows WHERE movie_id = " . $movie['id']);
+    $shows = [];
+    while ($show = $show_result->fetch_assoc()) {
+        $shows[] = $show;
+    }
+    $movie['shows'] = $shows;
+    $movies_with_shows[] = $movie;
+}
 ?>
 
 <!DOCTYPE html>
@@ -146,7 +198,7 @@ $result->free();
                 <label for="movie_id" class="block text-gray-700">Movie</label>
                 <select name="movie_id" id="movie_id" class="mt-1 p-2 border rounded w-full" required>
                     <option value="">Select a movie</option>
-                    <?php foreach ($movies as $movie) : ?>
+                    <?php foreach ($movies_with_shows as $movie) : ?>
                         <option value="<?php echo $movie['id']; ?>"><?php echo htmlspecialchars($movie['title']); ?></option>
                     <?php endforeach; ?>
                 </select>
@@ -157,6 +209,43 @@ $result->free();
             </div>
             <button type="submit" class="p-2 bg-blue-500 text-white rounded">Add Show</button>
         </form>
+
+        <h2 class="text-xl font-bold mt-8">Movies and Shows</h2>
+        <?php if ($movieError) : ?>
+            <div class="bg-red-200 text-red-700 p-2 rounded mt-4">
+                <?php echo htmlspecialchars($movieError); ?>
+            </div>
+        <?php endif; ?>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+            <?php foreach ($movies_with_shows as $movie) : ?>
+                <div class="border rounded p-4">
+                    <h3 class="text-lg font-bold"><?php echo htmlspecialchars($movie['title']); ?></h3>
+                    <p><?php echo htmlspecialchars($movie['description']); ?></p>
+                    <p><strong>Release Date:</strong> <?php echo htmlspecialchars($movie['release_date']); ?></p>
+                    <p><strong>Duration:</strong> <?php echo htmlspecialchars($movie['duration']); ?> minutes</p>
+                    <form method="post" class="mt-2">
+                        <input type="hidden" name="delete_movie" value="1">
+                        <input type="hidden" name="movie_id" value="<?php echo $movie['id']; ?>">
+                        <button type="submit" class="p-2 bg-red-500 text-white rounded">Delete Movie</button>
+                    </form>
+                    <?php if (count($movie['shows']) > 0) : ?>
+                        <h4 class="mt-4 font-bold">Shows</h4>
+                        <ul>
+                            <?php foreach ($movie['shows'] as $show) : ?>
+                                <li class="border rounded p-2 mt-2">
+                                    <p><strong>Show Time:</strong> <?php echo htmlspecialchars($show['show_time']); ?></p>
+                                    <form method="post" class="mt-2">
+                                        <input type="hidden" name="delete_show" value="1">
+                                        <input type="hidden" name="show_id" value="<?php echo $show['id']; ?>">
+                                        <button type="submit" class="p-2 bg-red-500 text-white rounded">Delete Show</button>
+                                    </form>
+                                </li>
+                            <?php endforeach; ?>
+                        </ul>
+                    <?php endif; ?>
+                </div>
+            <?php endforeach; ?>
+        </div>
     </div>
 </body>
 
