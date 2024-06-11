@@ -81,6 +81,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_show'])) {
     }
 }
 
+// Handle delete requests for movies
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_movie'])) {
+    $movie_id = $_POST['movie_id'];
+
+    // Start a transaction
+    $conn->begin_transaction();
+
+    try {
+        // Delete shows and seats associated with the movie
+        $conn->query("DELETE FROM seats WHERE show_id IN (SELECT id FROM shows WHERE movie_id = $movie_id)");
+        $conn->query("DELETE FROM shows WHERE movie_id = $movie_id");
+        // Delete the movie
+        $stmt = $conn->prepare("DELETE FROM movies WHERE id = ?");
+        $stmt->bind_param("i", $movie_id);
+        if (!$stmt->execute()) {
+            throw new Exception($stmt->error);
+        }
+        $stmt->close();
+
+        // Commit the transaction
+        $conn->commit();
+        $successMessage = "Movie deleted successfully!";
+    } catch (Exception $e) {
+        // Rollback the transaction on error
+        $conn->rollback();
+        $movieError = "Error: " . $e->getMessage();
+    }
+}
+
+// Handle delete requests for shows
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_show'])) {
+    $show_id = $_POST['show_id'];
+
+    try {
+        // Delete seats associated with the show
+        $conn->query("DELETE FROM seats WHERE show_id = $show_id");
+        // Delete the show
+        $stmt = $conn->prepare("DELETE FROM shows WHERE id = ?");
+        $stmt->bind_param("i", $show_id);
+        if (!$stmt->execute()) {
+            throw new Exception($stmt->error);
+        }
+        $stmt->close();
+
+        $successMessage = "Show deleted successfully!";
+    } catch (Exception $e) {
+        $showError = "Error: " . $e->getMessage();
+    }
+}
+
 // Fetch all movies and their shows for display
 $movies_with_shows = [];
 $movie_result = $conn->query("SELECT * FROM movies");
@@ -161,22 +211,37 @@ while ($movie = $movie_result->fetch_assoc()) {
         </form>
 
         <h2 class="text-xl font-bold mt-8">Movies and Shows</h2>
+        <?php if ($movieError) : ?>
+            <div class="bg-red-200 text-red-700 p-2 rounded mt-4">
+                <?php echo htmlspecialchars($movieError); ?>
+            </div>
+        <?php endif; ?>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             <?php foreach ($movies_with_shows as $movie) : ?>
-                <div class="bg-white p-4 shadow-lg rounded">
-                    <h3 class="text-xl font-bold"><?php echo htmlspecialchars($movie['title']); ?></h3>
-                    <p class="text-gray-700 mt-2"><?php echo htmlspecialchars($movie['description']); ?></p>
-                    <p class="text-gray-700 mt-2">Release Date: <?php echo htmlspecialchars($movie['release_date']); ?></p>
-                    <p class="text-gray-700 mt-2">Duration: <?php echo htmlspecialchars($movie['duration']); ?> minutes</p>
-                    <h4 class="text-lg font-bold mt-4">Shows</h4>
-                    <?php if (!empty($movie['shows'])) : ?>
-                        <ul class="list-disc list-inside">
+                <div class="border rounded p-4">
+                    <h3 class="text-lg font-bold"><?php echo htmlspecialchars($movie['title']); ?></h3>
+                    <p><?php echo htmlspecialchars($movie['description']); ?></p>
+                    <p><strong>Release Date:</strong> <?php echo htmlspecialchars($movie['release_date']); ?></p>
+                    <p><strong>Duration:</strong> <?php echo htmlspecialchars($movie['duration']); ?> minutes</p>
+                    <form method="post" class="mt-2">
+                        <input type="hidden" name="delete_movie" value="1">
+                        <input type="hidden" name="movie_id" value="<?php echo $movie['id']; ?>">
+                        <button type="submit" class="p-2 bg-red-500 text-white rounded">Delete Movie</button>
+                    </form>
+                    <?php if (count($movie['shows']) > 0) : ?>
+                        <h4 class="mt-4 font-bold">Shows</h4>
+                        <ul>
                             <?php foreach ($movie['shows'] as $show) : ?>
-                                <li class="mt-2">Show Time: <?php echo htmlspecialchars($show['show_time']); ?></li>
+                                <li class="border rounded p-2 mt-2">
+                                    <p><strong>Show Time:</strong> <?php echo htmlspecialchars($show['show_time']); ?></p>
+                                    <form method="post" class="mt-2">
+                                        <input type="hidden" name="delete_show" value="1">
+                                        <input type="hidden" name="show_id" value="<?php echo $show['id']; ?>">
+                                        <button type="submit" class="p-2 bg-red-500 text-white rounded">Delete Show</button>
+                                    </form>
+                                </li>
                             <?php endforeach; ?>
                         </ul>
-                    <?php else : ?>
-                        <p class="text-gray-700 mt-2">No shows available.</p>
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
